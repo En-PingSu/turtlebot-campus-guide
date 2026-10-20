@@ -4,7 +4,9 @@ Speak or type a request like "take me to desk 1" or "visit tables 3, 5, and 7", 
 
 Built as the final project for **CS5335 Robotic Science and Systems** at Northeastern University (Spring 2026).
 
-**Demo video:** _link coming soon_
+[![Demo: the TurtleBot driving to a table while the dashboard map tracks it](docs/media/demo-poster.jpg)](https://enpingsu.io/img/turtlebot-demo.mp4)
+
+**[Watch the full demo video (4.5 min)](https://enpingsu.io/img/turtlebot-demo.mp4)**
 
 ## How it works
 
