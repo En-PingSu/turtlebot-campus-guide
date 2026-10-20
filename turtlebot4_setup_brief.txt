@@ -1,0 +1,115 @@
+TurtleBot4 Navigation Setup - Session Brief
+Date: February 26, 2026
+============================================
+
+OBJECTIVE
+
+Set up the campus_nav_llm project on a TurtleBot4 robot, following the provided
+setup instructions, and diagnose why the map was not loading in RViz2.
+
+
+INITIAL DIAGNOSIS
+
+Examined the project structure across three directories (~/robotic_llm,
+~/campus_ws, ~/CS5335TurtleBot) and identified several issues with the original
+setup instructions:
+
+- Wrong launch file name: The instructions referenced nav_bringup.launch.py,
+  which doesn't exist. The correct files are localization.launch.py and
+  nav2.launch.py in the turtlebot4_navigation package.
+
+- Relative image path in my_map.yaml: The map config used image: my_map.pgm
+  (relative), which fails when the map server runs from a different working
+  directory. Fixed to use an absolute path.
+
+- Empty placeholder files: Several bringup launch files and Nav2 config files
+  (nav2_params.yaml, amcl_config.yaml) were 0 bytes.
+
+- No RViz config: The project had no .rviz file; used turtlebot4_viz
+  view_robot.launch.py instead.
+
+
+STEPS COMPLETED
+
+- Pulled latest code, installed Python dependencies, configured the .env file
+  with the OpenRouter API key.
+- Fixed my_map.yaml to use an absolute path for the PGM image.
+- Built the campus_nav_llm package with colcon build --symlink-install.
+- Launched localization, Nav2, and RViz2 -- confirmed the map loaded
+  (379x369 at 0.05 m/cell).
+
+
+ROBOT CONNECTION ISSUES
+
+- Verified the TurtleBot4 (IP 192.168.50.31, namespace turtlebot468) was
+  reachable and its ROS2 nodes were publishing.
+
+- Discovered the robot's Raspberry Pi clock was stuck at November 2023 (last
+  login date) because the RPi has no battery-backed RTC. This caused all TF
+  timestamps to be years off, so AMCL and RViz rejected all sensor data.
+
+- SSH'd into the robot (ubuntu@192.168.50.31, password from ROBOT_SSH_PASS) and set the
+  correct date. However, the Create3 base (iRobot) has its own internal clock
+  that syncs from the RPi via NTP -- this took several minutes to propagate.
+
+- The Create3 was rebooted (physical button press) to force a clock sync, which
+  also cut power to the RPi. After redocking and powering back on, both clocks
+  were eventually synchronized to 2026.
+
+
+NAMESPACE AND CLOCK SKEW CHALLENGES
+
+- The robot publishes all topics under the /turtlebot468/ namespace (e.g.,
+  /turtlebot468/scan, /turtlebot468/tf), but Nav2 nodes launched without a
+  namespace listen on /scan, /tf. This mismatch meant AMCL received no sensor
+  data.
+
+- Launching with namespace:=turtlebot468 solved the topic routing but
+  introduced bond timeout failures -- a known issue with FastRTPS DDS and
+  namespaced lifecycle nodes.
+
+- A persistent 5-12 second clock skew between the Create3 (odom/TF publisher)
+  and the RPi (lidar publisher) caused AMCL to drop all scan messages with
+  "timestamp earlier than all data in the transform cache."
+
+- Created a custom localization_params.yaml with use_sim_time: False (the
+  default config had True, which is for simulation only) and
+  transform_tolerance: 15.0 to accommodate the clock skew.
+
+
+FINAL STATE
+
+- Localization: AMCL running and active with the correct map, publishing
+  particle clouds visible in RViz2.
+- Map: Loaded and displayed correctly in RViz2 (379x369, 0.05 m/cell).
+- Robot visualization: Laser scan and AMCL particles visible on the map,
+  robot position estimated.
+- LLM Planner: Running and ready (Phase 1, 3 tools).
+- Task Executor: Code updated to support the turtlebot468 namespace for
+  waitUntilNav2Active() and AMCL pose subscription.
+- Nav2 navigation stack: Repeatedly hit bond timeout errors when launched with
+  namespace. This remains the primary unresolved blocker.
+
+
+CODE CHANGES MADE
+
+- campus_nav_llm/maps/my_map.yaml -- Changed image: to absolute path.
+- campus_nav_llm/campus_nav_llm/task_executor_node.py -- Added robot_namespace
+  parameter, namespaced waitUntilNav2Active() calls and AMCL pose subscription
+  topic.
+- Created ~/campus_ws/localization_params.yaml -- Fixed use_sim_time and
+  increased transform_tolerance.
+- Created ~/campus_ws/nav2_params.yaml -- Fixed use_sim_time for Nav2.
+
+
+REMAINING ISSUES
+
+1. Nav2 bond timeouts with namespace: The lifecycle manager fails to bond with
+   namespaced servers within the 4-second timeout. Possible solutions: topic
+   relays from namespaced to non-namespaced, or configuring the robot to not
+   use a namespace.
+
+2. Create3 clock drift: The Create3 base clock consistently drifts from the
+   RPi, requiring high transform_tolerance. A more permanent fix would be
+   configuring chrony on the RPi to serve time to the Create3 more
+   aggressively.
