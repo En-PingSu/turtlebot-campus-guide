@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import os
+import re
 import signal
 import shlex
 import subprocess
@@ -24,6 +25,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+
+from local_origin import request_allowed
 
 logger = logging.getLogger("dashboard")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
@@ -304,7 +307,7 @@ def _run_preflight_checks() -> list[dict]:
     def _ssh_cmd(remote_cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["sshpass", "-p", robot_pass,
-             "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+             "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
              f"{robot_user}@{robot_ip}", remote_cmd],
             capture_output=True, text=True, timeout=timeout,
         )
@@ -684,6 +687,14 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
+@app.middleware("http")
+async def same_origin_only(request: Request, call_next):
+    """Refuse requests from other websites and DNS-rebound hosts (see local_origin.py)."""
+    if not request_allowed(request.headers.get("host"), request.headers.get("origin")):
+        return JSONResponse({"ok": False, "error": "Forbidden origin"}, status_code=403)
+    return await call_next(request)
+
+
 async def _broadcaster():
     """Fan out queued messages to all connected WebSocket clients."""
     while True:
@@ -818,6 +829,8 @@ async def add_location(request: Request):
     name = data.get("name", "").strip()
     if not name:
         return JSONResponse({"ok": False, "error": "Name is required"})
+    if not _LOCATION_NAME.match(name):
+        return JSONResponse({"ok": False, "error": "Names can use letters, numbers, spaces and . , ' ( ) & / - (up to 64 characters)"})
 
     x = float(data.get("x", 0))
     y = float(data.get("y", 0))
@@ -868,6 +881,16 @@ async def add_location(request: Request):
         return JSONResponse({"ok": False, "error": str(e)})
 
 
+# Location names are shown in the UI and passed to the LLM. They are written to
+# config.yaml (which deploy.sh reads) only as keys reduced to [A-Za-z0-9_].
+_LOCATION_NAME = re.compile(r"^[\w][\w .,'()&/-]{0,63}$")
+_CONFIG_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _pose_key(name):
+    return re.sub(r"[^A-Za-z0-9_]", "_", name)
+
+
 def _save_semantic_and_config(sem_path, sem_data):
     """Write semantic_map.json (source + install copy) and update config.yaml."""
     import math
@@ -892,7 +915,7 @@ def _save_semantic_and_config(sem_path, sem_data):
             # Use underscored keys to match deploy.sh bash associative array
             new_poses = {}
             for name, loc in sem_data.get("locations", {}).items():
-                key = name.replace(" ", "_")
+                key = _pose_key(name)
                 theta = math.radians(loc.get("facing_deg", 0))
                 if theta > math.pi:
                     theta -= 2 * math.pi
@@ -909,8 +932,9 @@ def _save_semantic_and_config(sem_path, sem_data):
                 if section in cfg:
                     lines.append(f"{section}:")
                     for k, v in cfg[section].items():
-                        val = f'"{v}"' if isinstance(v, str) else v
-                        lines.append(f"  {k}: {val}")
+                        if not _CONFIG_KEY.match(str(k)):
+                            continue  # never write a key that could break the YAML
+                        lines.append(f"  {k}: {json.dumps(v)}")  # JSON scalars are valid YAML
             lines.append("")
             lines.append("known_poses:")
             for pose_name, pose in cfg["known_poses"].items():
@@ -1077,7 +1101,7 @@ def _ssh_fix(remote_cmd: str, timeout: int = 30) -> dict:
     try:
         r = subprocess.run(
             ["sshpass", "-p", robot_pass,
-             "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+             "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
              f"{robot_user}@{robot_ip}", remote_cmd],
             capture_output=True, text=True, timeout=timeout,
         )
@@ -1403,7 +1427,7 @@ def _create3_api(endpoint: str) -> dict:
     # Use sshpass + ssh to curl the Create3 API from the RPi
     cmd = [
         "sshpass", "-p", robot_pass,
-        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+        "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
         f"{robot_user}@{robot_ip}",
         f"curl -s -X POST http://{_CREATE3_IP}/api/{endpoint}",
     ]
@@ -1496,7 +1520,7 @@ async def odom_status():
         try:
             ssh_r = subprocess.run(
                 ["sshpass", "-p", robot_pass,
-                 "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3",
+                 "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=3",
                  f"{robot_user}@{robot_ip}",
                  f"source /etc/turtlebot4/setup.bash && "
                  f"export ROS_SUPER_CLIENT=True && "
@@ -1609,7 +1633,7 @@ async def rpi_restart_service():
         robot_pass = DEPLOY_CONFIG["robot_pass"]
         cmd = [
             "sshpass", "-p", robot_pass,
-            "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+            "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
             f"{robot_user}@{robot_ip}",
             "sudo systemctl restart turtlebot4.service",
         ]
@@ -1843,7 +1867,7 @@ async def diagnostics():
         try:
             ssh_cmd = [
                 "sshpass", "-p", robot_pass,
-                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+                "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
                 f"{robot_user}@{robot_ip}",
                 "ps aux | grep fast-discovery | grep -v grep | wc -l"
             ]
@@ -1858,7 +1882,7 @@ async def diagnostics():
         try:
             ssh_cmd = [
                 "sshpass", "-p", robot_pass,
-                "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+                "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
                 f"{robot_user}@{robot_ip}", "date +%s"
             ]
             r = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
@@ -1955,6 +1979,9 @@ async def save_apikey(request: Request):
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    if not request_allowed(ws.headers.get("host"), ws.headers.get("origin")):
+        await ws.close(code=1008)  # rejects the handshake
+        return
     await ws.accept()
     async with _ws_lock:
         _active_ws.add(ws)
