@@ -750,11 +750,16 @@ function buildDestButtons() {
 
 function buildLegend() {
   const legend = document.getElementById('mapLegend');
-  let html = '';
+  legend.innerHTML = '';
   for (const name of Object.keys(locations)) {
-    html += `<div class="loc-item" onclick="navigateTo('${name}')"><span class="loc-dot"></span>${name.replace(/_/g, ' ')}</div>`;
+    const item = document.createElement('div');
+    item.className = 'loc-item';
+    item.onclick = () => navigateTo(name);
+    const dot = document.createElement('span');
+    dot.className = 'loc-dot';
+    item.append(dot, name.replace(/_/g, ' '));
+    legend.appendChild(item);
   }
-  legend.innerHTML = html;
 }
 
 function navigateTo(name) {
@@ -1842,8 +1847,8 @@ function saveNewLocation() {
       } else {
         status.style.color = '#ff4466';
         if (data.suggestion) {
-          status.innerHTML = (data.error || 'Invalid position') +
-            `<br><button onclick="_useSuggestion(${data.suggestion.x}, ${data.suggestion.y}, 'add')" style="margin-top:4px; background:#0a2e1a; border:1px solid #1a3a2a; border-radius:4px; padding:2px 8px; color:#00ff88; cursor:pointer; font-size:10px;">Use suggested position</button>`;
+          status.innerHTML = escHtml(data.error || 'Invalid position') +
+            `<br><button onclick="_useSuggestion(${Number(data.suggestion.x)}, ${Number(data.suggestion.y)}, 'add')" style="margin-top:4px; background:#0a2e1a; border:1px solid #1a3a2a; border-radius:4px; padding:2px 8px; color:#00ff88; cursor:pointer; font-size:10px;">Use suggested position</button>`;
         } else {
           status.textContent = data.error || 'Save failed';
         }
@@ -1937,8 +1942,8 @@ function saveEditLocation() {
       } else {
         status.style.color = '#ff4466';
         if (data.suggestion) {
-          status.innerHTML = (data.error || 'Invalid position') +
-            `<br><button onclick="_useSuggestion(${data.suggestion.x}, ${data.suggestion.y}, 'edit')" style="margin-top:4px; background:#0a2e1a; border:1px solid #1a3a2a; border-radius:4px; padding:2px 8px; color:#00ff88; cursor:pointer; font-size:10px;">Use suggested position</button>`;
+          status.innerHTML = escHtml(data.error || 'Invalid position') +
+            `<br><button onclick="_useSuggestion(${Number(data.suggestion.x)}, ${Number(data.suggestion.y)}, 'edit')" style="margin-top:4px; background:#0a2e1a; border:1px solid #1a3a2a; border-radius:4px; padding:2px 8px; color:#00ff88; cursor:pointer; font-size:10px;">Use suggested position</button>`;
         } else {
           status.textContent = data.error || 'Save failed';
         }
@@ -2132,7 +2137,7 @@ function showSystemLogs() {
       renderLogSidebar('all');
     })
     .catch(err => {
-      document.getElementById('logsSidebar').innerHTML = '<div style="padding:14px;color:#ff4466;">' + err.message + '</div>';
+      document.getElementById('logsSidebar').innerHTML = '<div style="padding:14px;color:#ff4466;">' + escHtml(err.message) + '</div>';
     });
 }
 
@@ -2148,8 +2153,8 @@ function renderLogSidebar(filter) {
   sidebar.innerHTML = filtered.map(log => {
     const date = new Date(log.mtime * 1000);
     const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    return `<div class="log-item" onclick="loadLog('${log.id}', this)">
-      <div class="log-name"><span class="log-type-badge ${log.type}">${log.type}</span>${log.name}</div>
+    return `<div class="log-item" data-log-id="${escAttr(log.id)}" onclick="loadLog(this.dataset.logId, this)">
+      <div class="log-name"><span class="log-type-badge ${escAttr(log.type)}">${escHtml(log.type)}</span>${escHtml(log.name)}</div>
       <div class="log-meta">${dateStr} &middot; ${log.size_kb}KB</div>
     </div>`;
   }).join('');
@@ -2252,6 +2257,11 @@ function escHtml(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+// Escape for a double-quoted HTML attribute value
+function escAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ── Quality Report ──
