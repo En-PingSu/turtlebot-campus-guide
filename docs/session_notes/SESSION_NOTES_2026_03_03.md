@@ -4,7 +4,7 @@
 
 ### Project Overview
 
-- **Robot**: TurtleBot4 (Create3 base + RPi4), namespace `turtlebot468`, IP `192.168.50.31`, user `ubuntu`, password `turtlebot4`
+- **Robot**: TurtleBot4 (Create3 base + RPi4), namespace `turtlebot468`, IP `192.168.50.31`, user `ubuntu` (password in `$ROBOT_SSH_PASS`, not committed)
 - **Laptop**: Alienware m15 R7 AMD, Ubuntu 22.04, ROS2 Humble
 - **Workspace**: `~/campus_ws` — colcon workspace; `~/campus_ws/src/campus_nav_llm` is a symlink → `~/robotic_llm/campus_guide_bot/campus_nav_llm`
 - **Second repo**: `~/CS5335TurtleBot` (same code, different remote — keep in sync manually)
@@ -182,7 +182,7 @@ ros2 lifecycle set /turtlebot468/velocity_smoother activate
 ### Step 1: Fix Robot Clock (every reboot)
 ```bash
 ssh ubuntu@192.168.50.31
-# password: turtlebot4
+# password: $ROBOT_SSH_PASS (not committed)
 sudo date -s "YYYY-MM-DD HH:MM:SS"   # Type YOUR laptop's current time manually
 sudo chronyc makestep
 ```
