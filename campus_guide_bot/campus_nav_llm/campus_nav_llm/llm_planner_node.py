@@ -720,7 +720,7 @@ def create_ros_node():
                 try:
                     subprocess.run(
                         ["sshpass", "-p", os.environ.get("ROBOT_SSH_PASS", ""), "ssh",
-                         "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=3",
+                         "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=3",
                          "ubuntu@192.168.50.31", "sudo chronyc -a makestep"],
                         capture_output=True, timeout=10,
                     )

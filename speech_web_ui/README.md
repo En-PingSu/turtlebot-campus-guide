@@ -92,6 +92,8 @@ python speech_server.py --port 8888
 
 Open your browser at **http://localhost:8888**
 
+The server listens on `127.0.0.1` and only accepts commands from its own page. Pass `--host 0.0.0.0` to reach it from other devices on a trusted network. Note that browsers only allow the microphone on `localhost` or HTTPS, so other devices can type commands but not speak them over plain HTTP.
+
 In demo mode the server simulates the robot:
 - ~1.5 s after sending a command → shows *"[DEMO] Navigating to …"*
 - ~3 s later → shows *"✅ Arrived"*

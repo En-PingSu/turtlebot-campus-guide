@@ -23,6 +23,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import uvicorn
 
+from local_origin import request_allowed
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -170,6 +172,10 @@ async def health():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Robot commands: only from this server's own page (see local_origin.py)
+    if not request_allowed(websocket.headers.get("host"), websocket.headers.get("origin")):
+        await websocket.close(code=1008)  # rejects the handshake
+        return
     await websocket.accept()
     async with _ws_lock:
         _active_ws.add(websocket)
@@ -245,7 +251,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 def main():
     parser = argparse.ArgumentParser(description="TurtleBot468 Speech Web Bridge")
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Bind host (default: 127.0.0.1; use 0.0.0.0 only on a trusted network)")
     parser.add_argument("--port", type=int, default=8888, help="Bind port (default: 8888)")
     parser.add_argument("--ros", action="store_true", help="Enable ROS2 (requires sourced ROS2 env)")
     parser.add_argument("--reload", action="store_true", help="Enable hot-reload (dev mode)")
