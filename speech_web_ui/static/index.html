@@ -622,8 +622,8 @@ function initRecognition() {
     currentFinalText = final || currentFinalText;
     const box = document.getElementById("transcript-text");
     box.innerHTML =
-      (currentFinalText ? `<span class="final">${currentFinalText}</span> ` : "") +
-      (interim ? `<span class="interim">${interim}</span>` : "");
+      (currentFinalText ? `<span class="final">${escHtml(currentFinalText)}</span> ` : "") +
+      (interim ? `<span class="interim">${escHtml(interim)}</span>` : "");
   };
 
   r.onend = () => {
@@ -638,7 +638,7 @@ function initRecognition() {
     stopListeningUI();
     if (e.error !== "no-speech" && e.error !== "aborted") {
       document.getElementById("transcript-text").innerHTML =
-        `<span style="color:var(--red)">Mic error: ${e.error}</span>`;
+        `<span style="color:var(--red)">Mic error: ${escHtml(e.error)}</span>`;
     }
   };
 
@@ -785,7 +785,7 @@ function buildLocationCards() {
       document.querySelectorAll(".loc-card").forEach(c => c.classList.remove("active"));
       card.classList.add("active");
       document.getElementById("transcript-text").innerHTML =
-        `<span class="final">${loc.cmd}</span>`;
+        `<span class="final">${escHtml(loc.cmd)}</span>`;
     });
     grid.appendChild(card);
   });
@@ -803,6 +803,13 @@ function highlightLocation(targetId) {
 }
 
 // ── COMMAND LOG ─────────────────────────────────────────────────────────────
+// Commands, robot replies and status text are data; never render them as HTML.
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s ?? "");
+  return d.innerHTML;
+}
+
 function addLog(type, text, extra) {
   const log = document.getElementById("cmd-log");
   const now = new Date().toLocaleTimeString("en-US", { hour12: false });
@@ -810,12 +817,12 @@ function addLog(type, text, extra) {
   div.className = `cmd-entry ${type}`;
 
   let statusHTML = "";
-  if (extra) statusHTML = `<div class="cmd-status" style="color:var(--text-dim)">${extra}</div>`;
+  if (extra) statusHTML = `<div class="cmd-status" style="color:var(--text-dim)">${escHtml(extra)}</div>`;
   if (type === "reply") statusHTML = `<div class="cmd-status" style="color:var(--green)">↩ Robot</div>`;
 
   div.innerHTML = `
     <div class="cmd-time">${now}</div>
-    <div class="cmd-text">${text}</div>
+    <div class="cmd-text">${escHtml(text)}</div>
     ${statusHTML}
   `;
   log.prepend(div);  // newest on top
