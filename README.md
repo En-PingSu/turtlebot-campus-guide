@@ -37,6 +37,13 @@ ROS 2 Humble, Nav2, AMCL, SLAM, FastDDS Discovery Server, TurtleBot 4 (Raspberry
 
 See [`STARTUP_GUIDE.md`](STARTUP_GUIDE.md). Robot connection settings live in `config.yaml`; set the robot's SSH password through the `ROBOT_SSH_PASS` environment variable rather than committing it.
 
+### Access and safety notes
+
+- The dashboard (`127.0.0.1:8080`) and the speech UI (`127.0.0.1:8888` by default) only accept requests and WebSocket connections from their own page. Other websites open in the same browser, and DNS-rebinding tricks, get `403`. The speech UI can still listen more widely with `--host 0.0.0.0`; only do that on a trusted network.
+- SSH to the robot uses `StrictHostKeyChecking=accept-new`: the robot's host key is pinned the first time, and a different key is refused. After reflashing the robot, clear the old key once with `ssh-keygen -R <robot-ip>`.
+- Location names may use letters, numbers, spaces and `. , ' ( ) & / -`. In `config.yaml` they become keys of `[A-Za-z0-9_]`, and `deploy.sh` refuses a `robot.namespace`, IP, user or pose that isn't a plain value.
+- `python3 -m unittest discover -s tests` checks the origin rules.
+
 ## Team and credits
 
 Built by a five-person team: **Tong Wu, En-Ping Su, Jingsi Zhang, Dayu Wang, and Xuetao Li.**

@@ -102,6 +102,13 @@ else
   warn "config.yaml not found or python3 unavailable, using defaults"
 fi
 
+# config.yaml can be edited from the dashboard, and these values reach SSH
+# commands and eval'd checks below, so accept only plain identifiers.
+[[ "$ROBOT_NS" =~ ^[A-Za-z0-9_]+$ ]] || { err "Invalid robot.namespace in config.yaml: $ROBOT_NS"; exit 1; }
+[[ "$ROBOT_IP" =~ ^[A-Za-z0-9.:-]+$ ]] || { err "Invalid robot.ip in config.yaml: $ROBOT_IP"; exit 1; }
+[[ "$ROBOT_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { err "Invalid robot.ssh_user in config.yaml: $ROBOT_USER"; exit 1; }
+[[ "$DISCOVERY_PORT" =~ ^[0-9]+$ ]] || { err "Invalid dds.discovery_port in config.yaml: $DISCOVERY_PORT"; exit 1; }
+
 # INIT_X, INIT_Y, INIT_THETA are set by --pose argument (default: front_door)
 
 # ── Utility ──
@@ -179,6 +186,10 @@ else
   }
   log "Custom initial pose: ($INIT_X, $INIT_Y, $INIT_THETA)"
 fi
+NUM_RE='^-?[0-9]+([.][0-9]+)?$'
+for v in "$INIT_X" "$INIT_Y" "$INIT_THETA"; do
+  [[ "$v" =~ $NUM_RE ]] || { err "Pose values must be numbers: $POSE_NAME"; exit 1; }
+done
 
 # ── Environment setup ──
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
@@ -192,7 +203,7 @@ export ROS_SUPER_CLIENT=True
 if [[ "$SKIP_CLOCK" == false ]]; then
   step 1 "Clock sync (chrony)"
 
-  SSH_CMD="sshpass -p $ROBOT_PASS ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 $ROBOT_USER@$ROBOT_IP"
+  SSH_CMD="sshpass -p $ROBOT_PASS ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 $ROBOT_USER@$ROBOT_IP"
 
   if ! command -v sshpass &>/dev/null; then
     warn "sshpass not installed. Sync clock manually or install sshpass."
