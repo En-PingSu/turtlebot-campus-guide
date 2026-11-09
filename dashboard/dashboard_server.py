@@ -1751,12 +1751,19 @@ async def read_log(log_id: str, tail: int = 200):
     event_dir = Path.home() / ".campus_nav_logs"
     deploy_dir = Path(ws_dir) / "log" / "deploy"
 
-    # Find the file
+    # Find the file. Only the same files list_logs() offers are readable;
+    # matching any stem in these directories would also serve config.yaml
+    # and .env from the workspace root.
     target = None
-    for d in [deploy_dir, event_dir, Path(ws_dir)]:
+    for d, pattern in [
+        (deploy_dir, "deploy_*.log"),
+        (event_dir, "lifecycle_*.jsonl"),
+        (event_dir, "events_*.jsonl"),
+        (Path(ws_dir), "SESSION_NOTES_*.md"),
+    ]:
         if not d.is_dir():
             continue
-        for f in d.iterdir():
+        for f in d.glob(pattern):
             if f.stem == log_id:
                 target = f
                 break
